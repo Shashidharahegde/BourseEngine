@@ -1,0 +1,36 @@
+# Maven
+target/
+
+# Compiled class files
+*.class
+
+# Logs
+*.log
+
+# IDE - IntelliJ
+.idea/
+*.iml
+*.iws
+
+# IDE - Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# IDE - VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+.env
+
+
+# Docs (local notes, not for version control)
+PLAN.md
+CLAUDE.md
