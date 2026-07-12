@@ -27,7 +27,7 @@ public final class MatchingEngine {
         this.nextTradeSequence = 1;
     }
 
-//
+
     public synchronized List<Trade> submitOrder(Order order) {
         Objects.requireNonNull(
                 order,
@@ -175,12 +175,23 @@ public final class MatchingEngine {
     LimitOrderBook orderBook =
             orderBooks.get(normalizedSymbol);
 
-    if (orderBook == null) {
-        return false;
+        if (orderBook == null) {
+            return false;
+        }
+
+        return orderBook.cancelOrder(orderId);
     }
 
-    return orderBook.cancelOrder(orderId);
-}
+    // Retrieves the order book for a symbol:
+
+    public synchronized LimitOrderBook getOrderBook(
+            String symbol
+    ) {
+        String normalizedSymbol =
+                normalizeSymbol(symbol);
+
+        return orderBooks.get(normalizedSymbol);
+    }
 
     private String generateTradeId() {
         String tradeId =
@@ -191,11 +202,11 @@ public final class MatchingEngine {
         return tradeId;
     }
 
-    public List<Trade> getTradeHistory() {
+    public synchronized List<Trade> getTradeHistory() {
         return List.copyOf(tradeHistory);
     }
 
-    public int getOrderBookCount() {
+    public synchronized int getOrderBookCount() {
         return orderBooks.size();
     }
 
@@ -226,4 +237,3 @@ public final class MatchingEngine {
                 .toUpperCase(Locale.ROOT);
     }
 }
-
