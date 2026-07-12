@@ -122,7 +122,7 @@ public final class MatchingEngine {
     }
     
 
-        private void matchSellOrder(
+    private void matchSellOrder(
             Order sellOrder,
             LimitOrderBook orderBook,
             List<Trade> generatedTrades
@@ -164,6 +164,23 @@ public final class MatchingEngine {
         }
     }
 
+    //Cancelling Order Logic:
+    public synchronized boolean cancelOrder(
+        String symbol,
+        String orderId
+) {
+    String normalizedSymbol =
+            normalizeSymbol(symbol);
+
+    LimitOrderBook orderBook =
+            orderBooks.get(normalizedSymbol);
+
+    if (orderBook == null) {
+        return false;
+    }
+
+    return orderBook.cancelOrder(orderId);
+}
 
     private String generateTradeId() {
         String tradeId =
@@ -174,6 +191,14 @@ public final class MatchingEngine {
         return tradeId;
     }
 
+    public List<Trade> getTradeHistory() {
+        return List.copyOf(tradeHistory);
+    }
+
+    public int getOrderBookCount() {
+        return orderBooks.size();
+    }
+
     private void validateOrderForSubmission(Order order) {
         if (order.getStatus() != OrderStatus.NEW) {
             throw new IllegalStateException(
@@ -181,7 +206,24 @@ public final class MatchingEngine {
             );
         }
 
+        if (order.getType() == OrderType.MARKET
+                && order.getPrice() != 0) {
+            throw new IllegalArgumentException(
+                    "Market order price must be zero"
+            );
+        }
+    }
 
-}
+    private String normalizeSymbol(String symbol) {
+        if (symbol == null || symbol.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Symbol must not be null or blank"
+            );
+        }
+
+        return symbol
+                .trim()
+                .toUpperCase(Locale.ROOT);
+    }
 }
 
