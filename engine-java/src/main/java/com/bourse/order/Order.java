@@ -1,6 +1,7 @@
 package com.bourse.order;
 import java.time.Instant;
 import java.util.Objects; //for timestamp support and null validation
+import java.util.Locale;
 
 public class Order {
 
@@ -55,7 +56,7 @@ public Order(
     }
 
         this.id = id;
-        this.symbol = symbol.trim().toUpperCase();
+        this.symbol = symbol.trim().toUpperCase(Locale.ROOT);
         this.side = side;
         this.type = type;
         this.price = price;
