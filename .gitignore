@@ -34,3 +34,5 @@ dist/
 # Docs (local notes, not for version control)
 PLAN.md
 CLAUDE.md
+CHANGELOG.md
+COMMIT_CONVENTION.md

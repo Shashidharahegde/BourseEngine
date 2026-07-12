@@ -16,7 +16,6 @@ import com.bourse.order.OrderType;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -26,6 +25,7 @@ public final class PriceLevel {
     private final Deque<Order> orders;
     private long totalQuantity;
 
+    // We define a constructor PriceLevel that runs when PriceLevel Object is created
     public PriceLevel(long price) {
         if (price <= 0) {
             throw new IllegalArgumentException(
@@ -68,19 +68,41 @@ public final class PriceLevel {
     }
 
     public Order peekFirstOrder() {
-        removeInactiveOrders();
         return orders.peekFirst();
     }
 
-    public Order removeFirstOrder() {
-        Order order = orders.pollFirst();
 
-        if (order != null) {
-            totalQuantity -= order.getRemainingQuantity();
+    void fillFirstOrder(long fillQuantity) {
+        Order head = orders.peekFirst();
+
+        if (head == null) {
+            throw new IllegalStateException(
+                    "No orders at this price level"
+            );
         }
 
-        return order;
+        if (fillQuantity <= 0) {
+            throw new IllegalArgumentException(
+                    "Fill quantity must be positive"
+            );
+        }
+
+        if (fillQuantity > head.getRemainingQuantity()) {
+            throw new IllegalArgumentException(
+                    "Fill quantity exceeds remaining quantity of head order"
+            );
+        }
+
+        head.fill(fillQuantity);
+        totalQuantity -= fillQuantity;
+
+        if (totalQuantity < 0) {
+            throw new IllegalStateException(
+                    "PriceLevel totalQuantity went negative"
+            );
+        }
     }
+
 
     public boolean removeOrder(Order order) {
         Objects.requireNonNull(
@@ -94,38 +116,13 @@ public final class PriceLevel {
             totalQuantity -= order.getRemainingQuantity();
         }
 
+        if (totalQuantity < 0) {
+            throw new IllegalStateException(
+                    "PriceLevel totalQuantity went negative"
+            );
+        }
+
         return removed;
-    }
-
-    public void recordFill(long fillQuantity) {
-        if (fillQuantity <= 0) {
-            throw new IllegalArgumentException(
-                    "Fill quantity must be positive"
-            );
-        }
-
-        if (fillQuantity > totalQuantity) {
-            throw new IllegalArgumentException(
-                    "Fill quantity exceeds price-level quantity"
-            );
-        }
-
-        totalQuantity -= fillQuantity;
-    }
-
-    private void removeInactiveOrders() {
-        Iterator<Order> iterator = orders.iterator();
-
-        while (iterator.hasNext()) {
-            Order order = iterator.next();
-
-            if (order.getStatus() == OrderStatus.FILLED
-                    || order.getStatus() == OrderStatus.CANCELLED) {
-
-                totalQuantity -= order.getRemainingQuantity();
-                iterator.remove();
-            }
-        }
     }
 
     public long getPrice() {
@@ -133,23 +130,18 @@ public final class PriceLevel {
     }
 
     public long getTotalQuantity() {
-        removeInactiveOrders();
         return totalQuantity;
     }
 
     public int getOrderCount() {
-        removeInactiveOrders();
         return orders.size();
     }
 
     public boolean isEmpty() {
-        removeInactiveOrders();
         return orders.isEmpty();
     }
 
     public List<Order> getOrders() {
-        removeInactiveOrders();
         return List.copyOf(orders);
     }
 }
-

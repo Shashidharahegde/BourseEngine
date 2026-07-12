@@ -119,6 +119,14 @@ public final class LimitOrderBook {
                 : level.getPrice();
     }
 
+    public Order fillBestBidOrder(long fillQuantity) {
+        return fillBestOrder(bids, fillQuantity);
+    }
+
+    public Order fillBestAskOrder(long fillQuantity) {
+        return fillBestOrder(asks, fillQuantity);
+    }
+
     public boolean cancelOrder(String orderId) {
         validateOrderId(orderId);
 
@@ -197,6 +205,29 @@ public final class LimitOrderBook {
         }
 
         return null;
+    }
+
+    private Order fillBestOrder(
+            NavigableMap<Long, PriceLevel> levels,
+            long fillQuantity
+    ) {
+        PriceLevel priceLevel = getBestLevel(levels);
+
+        if (priceLevel == null) {
+            throw new IllegalStateException(
+                    "No orders are available to fill"
+            );
+        }
+
+        Order order = priceLevel.peekFirstOrder();
+
+        priceLevel.fillFirstOrder(fillQuantity);
+
+        if (order.isFilled()) {
+            removeOrderFromBook(order);
+        }
+
+        return order;
     }
 
     private void removeOrderFromBook(Order order) {
