@@ -28,6 +28,54 @@ public final class MatchingEngine {
     }
 
 //
+    public synchronized List<Trade> submitOrder(Order order) {
+        Objects.requireNonNull(
+                order,
+                "Order must not be null"
+        );
+
+        validateOrderForSubmission(order);
+
+        LimitOrderBook orderBook = orderBooks.computeIfAbsent(
+                order.getSymbol(),
+                LimitOrderBook::new
+        );
+
+        if (orderBook.containsOrder(order.getId())) {
+            throw new IllegalArgumentException(
+                    "An active order with this ID already exists"
+            );
+        }
+
+        List<Trade> generatedTrades = new ArrayList<>();
+
+        if (order.getSide() == Side.BUY) {
+            matchBuyOrder(
+                    order,
+                    orderBook,
+                    generatedTrades
+            );
+        } else {
+            matchSellOrder(
+                    order,
+                    orderBook,
+                    generatedTrades
+            );
+        }
+
+        if (!order.isFilled()) {
+            if (order.getType() == OrderType.LIMIT) {
+                orderBook.addOrder(order);
+            } else {
+                order.cancel();
+            }
+        }
+
+        tradeHistory.addAll(generatedTrades);
+
+        return List.copyOf(generatedTrades);
+    }
+
 
 //methods: matchSellOrder & matchBuyOrder,  
 
@@ -72,6 +120,49 @@ public final class MatchingEngine {
             generatedTrades.add(trade);
         }
     }
+    
+
+        private void matchSellOrder(
+            Order sellOrder,
+            LimitOrderBook orderBook,
+            List<Trade> generatedTrades
+    ) {
+        while (!sellOrder.isFilled()) {
+            Order buyOrder = orderBook.getBestBidOrder();
+
+            if (buyOrder == null) {
+                break;
+            }
+
+            if (sellOrder.getType() == OrderType.LIMIT
+                    && buyOrder.getPrice() < sellOrder.getPrice()) {
+                break;
+            }
+
+            long executedQuantity = Math.min(
+                    sellOrder.getRemainingQuantity(),
+                    buyOrder.getRemainingQuantity()
+            );
+
+            Order executedBuyOrder =
+                    orderBook.fillBestBidOrder(
+                            executedQuantity
+                    );
+
+            sellOrder.fill(executedQuantity);
+
+            Trade trade = new Trade(
+                    generateTradeId(),
+                    sellOrder.getSymbol(),
+                    executedBuyOrder.getId(),
+                    sellOrder.getId(),
+                    executedBuyOrder.getPrice(),
+                    executedQuantity
+            );
+
+            generatedTrades.add(trade);
+        }
+    }
 
 
     private String generateTradeId() {
@@ -83,4 +174,14 @@ public final class MatchingEngine {
         return tradeId;
     }
 
+    private void validateOrderForSubmission(Order order) {
+        if (order.getStatus() != OrderStatus.NEW) {
+            throw new IllegalStateException(
+                    "Only new orders can be submitted"
+            );
+        }
+
+
 }
+}
+
