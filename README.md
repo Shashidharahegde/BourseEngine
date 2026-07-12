@@ -1,160 +1,357 @@
 # Bourse Engine
 
-A limit order-book matching engine — the component at the centre of every exchange, responsible for pairing buy and sell orders under strict price-time priority.
+Bourse Engine is a Java-based trading and order-matching engine.
 
-Written in Java. No framework, no database, no I/O in the core: the matching engine is a pure library that can be reasoned about, tested, and benchmarked in isolation.
+Its core responsibility is to accept buy and sell orders, maintain an order book, and produce trades using strict **price-time priority**—the same fundamental rule used by electronic exchanges.
 
----
+The matching engine is being developed as a standalone library with:
 
-## Status
+* No application framework
+* No database dependency
+* No user-interface dependency
+* No network or file I/O inside the core engine
 
-> **In active development.** The domain model and book structure are in place; the matching loop is being implemented. This section is kept honest — see the roadmap below for exactly what is and isn't built.
+This keeps the matching logic deterministic, testable, and suitable for benchmarking.
 
-| Component | Status |
-|---|---|
-| Domain model (`Order`, `Trade`, enums) | ✅ Built |
-| `PriceLevel` — FIFO queue + aggregate volume | ✅ Built |
-| `OrderBook` — two-sided, price-ordered | ✅ Built |
-| `MatchingEngine` — limit matching, partial fills | 🚧 In progress |
-| Cancellation (O(1)) | 🚧 In progress |
-| Market orders | ⬜ Planned |
-| Property-based invariant tests | ⬜ Planned |
-| REST API + WebSocket L2 feed | ⬜ Planned |
-| Event-sourced recovery (replay + snapshots) | ⬜ Planned |
-| React order-book UI | ⬜ Planned |
-| AWS deployment (CDK, ECS/Fargate) | ⬜ Planned |
-| Latency benchmarks (p50/p99) | ⬜ Planned |
+## Current Status
 
----
+The following components are complete:
 
-## The problem
+* Order-side representation using `BUY` and `SELL`
+* Limit and market order types
+* Order lifecycle tracking
+* Partial and complete order fills
+* Order cancellation
+* Trade representation
+* Validation for orders and trades
+* Unit tests for `Order` and `Trade`
 
-An exchange receives a continuous stream of orders for an instrument. Buyers post **bids**; sellers post **asks**. When the highest bid meets the lowest ask, the **spread** is crossed and a trade executes.
+The order book and matching logic will be implemented next.
 
-The engine's job is to maintain the book of all resting (unfilled) orders and, for every incoming order, decide instantly what it matches against — under two rules:
+## Project Structure
 
-1. **Price priority** — the best price is matched first. An incoming buy takes the *lowest* ask; an incoming sell hits the *highest* bid.
-2. **Time priority** — among orders at the *same* price, the one that arrived earliest is filled first (FIFO).
-
-A trade executes at the **resting order's price**, not the incoming order's. An order that cannot be fully matched rests in the book with its remaining quantity.
-
-This is deceptively hard to do well. Every operation is on the hot path, and the three operations have conflicting structural demands:
-
-- **Add** — must find or create the correct price level, in order.
-- **Cancel** — must remove an arbitrary order from anywhere in the book. In real markets *cancellations vastly outnumber executions*, so cancel performance matters more than match performance.
-- **Match** — must repeatedly access the best price level and walk it in arrival order.
-
-No single data structure serves all three well. The design below composes three.
-
----
-
-## Design decisions
-
-### The book: an ordered map of price levels, each holding a FIFO queue
-
-```
-OrderBook
-├── bids : TreeMap<Long, PriceLevel>   (descending — firstEntry() = best bid)
-├── asks : TreeMap<Long, PriceLevel>   (ascending  — firstEntry() = best ask)
-└── byId : HashMap<String, Order>      (O(1) cancel)
-
-PriceLevel
-├── orders : Deque<Order>   (FIFO — enforces time priority for free)
-└── totalVolume : long      (maintained on add/remove — O(1) depth queries)
-```
-
-| Operation | Complexity |
-|---|---|
-| Add order | O(log M) to find/create the level, O(1) to append within it |
-| Cancel order | O(1) lookup via `byId`, O(1) unlink from the deque |
-| Best bid / best ask | O(1) — `firstEntry()` |
-| Match | O(1) to reach the best level, then linear in orders *consumed* |
-
-*(M = number of distinct price levels, typically far smaller than N, the number of orders.)*
-
-### Why a `TreeMap` (red-black tree) and not a heap
-
-A heap is the more common textbook answer — a min-heap of asks, a max-heap of bids — and it gives O(1) access to the single best price. It was rejected for two reasons:
-
-1. **Mid-structure removal.** A binary heap cannot locate an arbitrary element. Cancelling an order that empties a price level requires removing that level from the *middle* of the heap, which needs an auxiliary map tracking each element's heap index — and that index changes on every sift. It's fragile bookkeeping on the hottest path in the system.
-2. **Ordered traversal.** A heap exposes only the *best* price cheaply. Publishing L2 market data (aggregated depth across the top N levels) requires walking levels in price order — natural in a tree, awkward in a heap.
-
-A `TreeMap` gives O(log M) insert and removal *by key*, with no side-index to maintain, plus ordered iteration. The tradeoff — O(log M) vs O(1) best-price access — is not the bottleneck at this scale.
-
-### Why prices are `long`, never `double`
-
-Prices are stored as integers in **minor units** (paise/cents). Floating-point cannot represent decimal money exactly, so comparisons drift and arithmetic accumulates error. In a matching engine, `bid >= ask` being wrong by `1e-15` is a correctness bug that silently produces or suppresses trades. Integer arithmetic is exact.
-
-### Why the matching core is single-threaded
-
-The engine is a **single-writer, deterministic core**. Concurrency lives at the *edges*: many clients feed orders into one sequenced ingress stream, and a separate fan-out publishes the outbound trade feed. The matching loop itself processes that stream one command at a time.
-
-This is deliberate, not a limitation:
-
-- **Determinism.** The same input sequence always produces the same trades. No wall-clock reads, no randomness inside the core — timestamps arrive *on* the order, they are not generated during matching. This makes the engine replayable and exhaustively testable.
-- **Latency.** Two threads mutating one book require locks on the hot path, and lock contention costs more than the parallelism gains.
-
-This mirrors the architecture used by production exchanges — most publicly, LMAX, whose engine runs business logic in-memory on a single thread surrounded by an event-sourced ring buffer.
-
-### Recovery via event sourcing *(planned)*
-
-The book will not be persisted. Instead, the **append-only stream of commands** (new order, cancel) is the source of truth, and the book is a derived projection rebuilt by replaying that log — with periodic snapshots so replay does not start from zero.
-
-This is what makes the determinism above valuable: given the same log, replay reconstructs a byte-identical book. It gives crash recovery, an immutable audit trail, and replay-based testing from a single mechanism.
-
----
-
-## Layout
-
-```
+```text
 bourse-engine/
+├── README.md
+├── PLAN.md
+├── CLAUDE.md
+├── .gitignore
+│
 ├── engine-java/
-│   └── src/main/java/com/bourse/
-│       ├── order/     Order, Side, OrderType, OrderStatus
-│       ├── trade/     Trade
-│       ├── book/      OrderBook, PriceLevel
-│       └── engine/    MatchingEngine   ← the single-writer core
-└── web/               React + TypeScript order-book UI (planned)
+│   ├── pom.xml
+│   └── src/
+│       ├── main/
+│       │   └── java/com/bourse/
+│       │       ├── order/
+│       │       │   ├── Side.java
+│       │       │   ├── OrderType.java
+│       │       │   ├── OrderStatus.java
+│       │       │   └── Order.java
+│       │       ├── trade/
+│       │       │   └── Trade.java
+│       │       ├── book/
+│       │       │   ├── PriceLevel.java
+│       │       │   └── LimitOrderBook.java
+│       │       └── engine/
+│       │           └── MatchingEngine.java
+│       │
+│       └── test/
+│           └── java/com/bourse/
+│               ├── order/
+│               │   └── OrderTest.java
+│               ├── trade/
+│               │   └── TradeTest.java
+│               ├── book/
+│               │   └── LimitOrderBookTest.java
+│               └── engine/
+│                   └── MatchingEngineTest.java
+│
+└── web/
 ```
 
-The engine has a two-method public surface:
+The `web` module is reserved for a future React and TypeScript interface.
+
+## Core Concepts
+
+### Order
+
+An `Order` represents a trader’s request to buy or sell an instrument.
+
+It stores:
+
+* A unique order ID
+* The instrument symbol
+* The buy or sell side
+* The order type
+* The price
+* The original quantity
+* The remaining quantity
+* The creation timestamp
+* The current status
+
+Example:
+
+```text
+Order ID: ORD-1
+Symbol: AAPL
+Side: BUY
+Type: LIMIT
+Price: 15000
+Quantity: 100
+Remaining quantity: 100
+Status: NEW
+```
+
+Most order fields are immutable after creation. Only the remaining quantity and status change as the order is filled or cancelled.
+
+### Trade
+
+A `Trade` represents an executed match between one buy order and one sell order.
+
+It stores:
+
+* A unique trade ID
+* The instrument symbol
+* The matched buy-order ID
+* The matched sell-order ID
+* The execution price
+* The executed quantity
+* The execution timestamp
+
+An order describes what a trader requested. A trade records what was actually executed.
+
+```text
+Buy Order + Sell Order → Trade
+```
+
+The relationship is maintained through `buyOrderId` and `sellOrderId`, which reference the IDs of the two matched orders.
+
+## Order Enums
+
+### `Side`
 
 ```java
-List<Trade> submit(Order order);
-void        cancel(String orderId);
+public enum Side {
+    BUY,
+    SELL
+}
 ```
 
-Everything else is internal. The core has no knowledge of what is calling it — REST, WebSocket, or a test harness.
+`Side` determines whether the trader wants to buy or sell.
 
----
+Using an enum prevents invalid values and spelling mistakes that could occur with strings.
 
-## Running
+### `OrderType`
+
+```java
+public enum OrderType {
+    LIMIT,
+    MARKET
+}
+```
+
+A limit order specifies an acceptable price.
+
+* A limit buy executes at its limit price or lower.
+* A limit sell executes at its limit price or higher.
+
+A market order does not specify an execution price and attempts to trade against the best available prices.
+
+In the current model:
+
+* Limit-order prices must be positive.
+* Market-order prices must be zero.
+
+### `OrderStatus`
+
+```java
+public enum OrderStatus {
+    NEW,
+    PARTIALLY_FILLED,
+    FILLED,
+    CANCELLED
+}
+```
+
+An order moves through a defined lifecycle:
+
+```text
+NEW
+ ├── PARTIALLY_FILLED
+ │    ├── FILLED
+ │    └── CANCELLED
+ ├── FILLED
+ └── CANCELLED
+```
+
+A filled or cancelled order cannot be filled again.
+
+## Order Behaviour
+
+### Filling an Order
+
+The `fill(long fillQuantity)` method reduces the remaining quantity after a trade.
+
+```java
+order.fill(40);
+```
+
+For an order with an original quantity of `100`:
+
+```text
+Remaining: 100 → 60
+Status: NEW → PARTIALLY_FILLED
+```
+
+When the remaining quantity reaches zero:
+
+```text
+Remaining: 0
+Status: FILLED
+```
+
+The method rejects:
+
+* Zero or negative fill quantities
+* Fills larger than the remaining quantity
+* Fills on cancelled orders
+* Additional fills on completed orders
+
+### Cancelling an Order
+
+The `cancel()` method changes an active order’s status to `CANCELLED`.
+
+Filled orders cannot be cancelled, and an already cancelled order cannot be cancelled again.
+
+### Checking Completion
+
+The `isFilled()` method returns `true` only when the order has the `FILLED` status.
+
+## Why Getter Methods Are Used
+
+The fields inside `Order` and `Trade` are private.
+
+Getter methods allow other engine components to read those values without allowing them to modify the objects directly.
+
+For example:
+
+```java
+if (order.getSide() == Side.BUY) {
+    // Process the order as a bid
+}
+```
+
+Order getters will be used by:
+
+* `PriceLevel`
+* `LimitOrderBook`
+* `MatchingEngine`
+* Unit tests
+* A future API or user interface
+
+Trade getters will be used for:
+
+* Returning matching results
+* Logging executions
+* Testing trade values
+* Displaying trade history
+
+## Timestamp Handling
+
+Order and trade timestamps are generated internally:
+
+```java
+this.timestamp = Instant.now();
+```
+
+This means callers do not need to provide timestamps manually.
+
+Generating the timestamp inside the model ensures that every new object records its creation time automatically.
+
+A future version may accept timestamps through a controlled clock abstraction to support deterministic testing, historical replay, and event simulation.
+
+## Price Representation
+
+Prices are stored using `long`, not `double`.
+
+For example:
+
+```text
+15025 = $150.25
+```
+
+when one unit represents one cent.
+
+Integer price representation avoids floating-point precision problems and allows prices to be compared exactly.
+
+A production engine would normally define a tick size for each instrument.
+
+## Planned Matching Model
+
+Each instrument will have its own `LimitOrderBook`.
+
+The book will contain:
+
+* Bids ordered from highest price to lowest price
+* Asks ordered from lowest price to highest price
+* FIFO order queues at each price level
+* A lookup map for locating orders by ID
+
+Orders will follow price-time priority:
+
+1. The best available price is matched first.
+2. At the same price, the oldest order is matched first.
+3. A trade executes at the price of the resting order.
+4. Unmatched limit-order quantity remains in the book.
+5. Unmatched market-order quantity is discarded.
+
+## Building and Testing
+
+Requirements:
+
+* Java 17 or newer
+* Maven 3.8 or newer
+
+From the `engine-java` directory:
 
 ```bash
-cd engine-java
 mvn test
 ```
 
----
+To compile without running tests:
 
-## Roadmap
+```bash
+mvn compile
+```
 
-**Phase 1 — Core engine.** Limit matching, partial fills, price-time priority, cancellation, market orders. Property-based invariant tests: the book never crosses, quantity is always conserved, time priority is never violated. Golden-master replay tests for determinism.
+## Development Roadmap
 
-**Phase 2 — Service.** Sequenced ingress with monotonic sequence numbers, idempotent order IDs, REST endpoints, WebSocket L2 depth feed with gap detection.
+The next implementation stages are:
 
-**Phase 3 — Durability.** Event-sourced command log, snapshots, replay-to-rebuild on startup.
+1. Build `PriceLevel` using a FIFO `Deque<Order>`.
+2. Build `LimitOrderBook` using ordered bid and ask maps.
+3. Implement price-time-priority matching.
+4. Implement order lookup and cancellation.
+5. Build `MatchingEngine` to manage one book per symbol.
+6. Add matching, cancellation, and price-priority tests.
+7. Add performance benchmarks.
+8. Add a web interface and API layer.
 
-**Phase 4 — Interface.** Live order book, trade tape, depth chart.
+## Design Goals
 
-**Phase 5 — Infrastructure.** Docker, AWS via CDK (ECS/Fargate for the stateful core — deliberately *not* Lambda), CloudWatch latency dashboards, CI.
+Bourse Engine prioritizes:
 
-**Phase 6 — Performance.** Load generator, p50/p99 match latency, and an array-indexed price-ladder book benchmarked against the `TreeMap` implementation.
+* Correctness
+* Deterministic behaviour
+* Clear domain modelling
+* Explicit validation
+* Price-time priority
+* Exact integer arithmetic
+* High unit-test coverage
+* Separation between domain logic and infrastructure
 
----
+## Disclaimer
 
-## References
+This project is for educational and portfolio purposes.
 
-- *How to Build a Fast Limit Order Book* — the canonical writeup on the tree-of-levels + linked-list + hashmap structure.
-- Fowler, M. — *The LMAX Architecture* (2011).
-- Thompson, Farley, Barker, Gee & Stewart — *Disruptor: High performance alternative to bounded queues for exchanging data between concurrent threads* (LMAX, 2011).
+It is not intended for real-money trading or production exchange operation.

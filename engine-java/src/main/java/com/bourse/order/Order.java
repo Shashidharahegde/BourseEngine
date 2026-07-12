@@ -14,7 +14,7 @@ public class Order {
     private final Instant timestamp;
     private OrderStatus status;
 
-}
+
 
 //We define a constructor named Order
 
@@ -28,32 +28,34 @@ public Order(
 
 ){
     //Id and symbol are essential
-         if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("Order ID is required");
-        }
+        if (id == null || id.isBlank()) {
+        throw new IllegalArgumentException("Order ID is required");
+    }
 
-        if (symbol == null || symbol.isBlank()) {
-            throw new IllegalArgumentException("Symbol is required");
-        }
-        if (quantity <= 0) {
-            throw new IllegalArgumentException("Quantity must be positive");
-        }
+    if (symbol == null || symbol.isBlank()) {
+        throw new IllegalArgumentException("Symbol is required");
+    }
+    if (quantity <= 0) {
+        throw new IllegalArgumentException("Quantity must be positive");
+    }
 
-        Objects.requireNonNull(side, "Side is required");
-        Objects.requireNonNull(type, "Order type is required");
+    Objects.requireNonNull(side, "Side is required");
+    Objects.requireNonNull(type, "Order type is required");
 
-        //Limit orders req a price, because Limit order means `Buy at this price or less`, `Sell at this price or higher.`
-        if (type == OrderType.LIMIT && price <= 0) {
-            throw new IllegalArgumentException(
-                    "Limit order price must be positive"
-            );
-        if (type == OrderType.MARKET && price != 0) {
-            throw new IllegalArgumentException(
-                    "Market order price must be zero"
-            );
+    //Limit orders req a price, because Limit order means `Buy at this price or less`, `Sell at this price or higher.`
+    if (type == OrderType.LIMIT && price <= 0) {
+        throw new IllegalArgumentException(
+                "Limit order price must be positive"
+        );
+    }
+    if (type == OrderType.MARKET && price != 0) {
+        throw new IllegalArgumentException(
+                "Market order price must be zero"
+        );
+    }
 
-                    this.id = id;
-        this.symbol = symbol;
+        this.id = id;
+        this.symbol = symbol.trim().toUpperCase();
         this.side = side;
         this.type = type;
         this.price = price;
