@@ -1,0 +1,15 @@
+{
+  "name": "bourse-engine",
+  "version": "1.0.0",
+  "description": "Bourse Engine is a Java-based trading and order-matching engine.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bourse-engine": "link:"
+  }
+}

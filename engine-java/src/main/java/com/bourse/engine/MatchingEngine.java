@@ -166,14 +166,14 @@ public final class MatchingEngine {
 
     //Cancelling Order Logic:
     public synchronized boolean cancelOrder(
-        String symbol,
-        String orderId
-) {
-    String normalizedSymbol =
-            normalizeSymbol(symbol);
+            String symbol,
+            String orderId
+    ) {
+        String normalizedSymbol =
+                normalizeSymbol(symbol);
 
-    LimitOrderBook orderBook =
-            orderBooks.get(normalizedSymbol);
+        LimitOrderBook orderBook =
+                orderBooks.get(normalizedSymbol);
 
         if (orderBook == null) {
             return false;
@@ -214,13 +214,6 @@ public final class MatchingEngine {
         if (order.getStatus() != OrderStatus.NEW) {
             throw new IllegalStateException(
                     "Only new orders can be submitted"
-            );
-        }
-
-        if (order.getType() == OrderType.MARKET
-                && order.getPrice() != 0) {
-            throw new IllegalArgumentException(
-                    "Market order price must be zero"
             );
         }
     }
