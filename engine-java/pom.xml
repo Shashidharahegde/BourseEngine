@@ -18,6 +18,13 @@
 
   <dependencyManagement>
     <dependencies>
+        <dependency>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin-bundle</artifactId>
+            <version>7.2.2</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
       <dependency>
         <groupId>org.junit</groupId>
         <artifactId>junit-bom</artifactId>
