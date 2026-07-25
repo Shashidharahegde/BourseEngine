@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 public final class MatchingEngine {
 
@@ -27,8 +28,24 @@ public final class MatchingEngine {
         this.nextTradeSequence = 1;
     }
 
+    public synchronized List<Trade> submitOrder(
+        String symbol,
+        Side side,
+        OrderType type,
+        long price,
+        long quantity) {
+            Order order = new Order(
+                    UUID.randomUUID().toString(),
+                    symbol,
+                    side,
+                    type,
+                    price,
+                    quantity
+            );
 
-    public synchronized List<Trade> submitOrder(Order order) {
+            return submitOrder(order);
+        }
+        public synchronized List<Trade> submitOrder(Order order) {
         Objects.requireNonNull(
                 order,
                 "Order must not be null"
