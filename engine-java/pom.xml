@@ -22,8 +22,6 @@
             <groupId>io.javalin</groupId>
             <artifactId>javalin-bundle</artifactId>
             <version>7.2.2</version>
-            <type>pom</type>
-            <scope>import</scope>
         </dependency>
       <dependency>
         <groupId>org.junit</groupId>
@@ -41,11 +39,16 @@
       <artifactId>junit-jupiter-api</artifactId>
       <scope>test</scope>
     </dependency>
+            <dependency>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin-bundle</artifactId>
+            <version>7.2.2</version>
+        </dependency>
     <!-- Optionally: parameterized tests support -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-params</artifactId>
-      <scope>test</scope>
+      <scope>src</scope>
     </dependency>
   </dependencies>
 
