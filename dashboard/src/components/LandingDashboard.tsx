@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from "react";
-import { sendOrder } from "../api/v1/Order";
+import { sendOrder } from "../api/v1/order";
 
 interface SymbolOption {
   value: string;
