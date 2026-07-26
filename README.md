@@ -21,8 +21,8 @@ The engine supports:
 
 | Phase                  | Planned Work                                                      | Goal                                                                                                                 |
 | ---------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1. Service Layer       | Expose the Java matching engine through a REST API                | Allow external applications to submit orders, cancel orders, inspect order books, and retrieve generated trades      |
-| 2. Next.js Frontend    | Build an interactive web interface connected to the API           | Let users create buy and sell orders, simulate market scenarios, inspect price levels, and observe matching behavior |
+| 1. Service Layer       | Expose the Java matching engine through a REST API                | Allow external applications to submit orders(done), cancel orders, inspect order books, and retrieve generated trades      |
+| 2. React.js Frontend    | Build an interactive web interface connected to the API           | Let users create buy and sell orders, simulate market scenarios, inspect price levels, and observe matching behavior |
 | 3. Deployment          | Containerize and host the backend and frontend                    | Make the simulator publicly accessible through a hosted web application                                              |
 | 4. Simulation Features | Add predefined and custom trading scenarios                       | Help users explore partial fills, market orders, cancellations, multi-symbol books, and price-time priority          |
 | 5. Persistence         | Add a database for orders, trades, simulations, and user sessions | Preserve historical data and support replay, analytics, and longer-running simulations                               |
