@@ -1,40 +1,33 @@
 package com.bourse.api.v1;
+
 import java.util.List;
 
+import com.bourse.dto.OrderRequest;
 import com.bourse.engine.MatchingEngine;
 import com.bourse.order.OrderType;
 import com.bourse.order.Side;
 import com.bourse.trade.Trade;
 
-import io.javalin.Javalin;
+import io.javalin.http.Handler;
 
-import com.bourse.dto.OrderRequest;
-class PlaceOrder{
+public class PlaceOrder {
 
-        public static void main(String[] args) {
+    public static Handler handler(MatchingEngine matchingEngine) {
 
-            MatchingEngine matchingEngine = new MatchingEngine();
-            
-             Javalin.create(config -> {
-                config.routes.post("/api/v1/placeOrder", ctx -> {
-                        OrderRequest request = ctx.bodyAsClass(OrderRequest.class);
+        return ctx -> {
 
-                        List<Trade> trades = matchingEngine.submitOrder(
-                        request.symbol(),
-                        Side.valueOf(request.side()),
-                        OrderType.valueOf(request.type()),
-                        request.price(),
-                        request.quantity()
-                    );
+            OrderRequest request = ctx.bodyAsClass(OrderRequest.class);
 
-                    ctx.status(200);
-                    ctx.json(trades);
+            List<Trade> trades = matchingEngine.submitOrder(
+                    request.symbol(),
+                    Side.valueOf(request.side()),
+                    OrderType.valueOf(request.type()),
+                    request.price(),
+                    request.quantity()
+            );
 
-                    }) ;
-
-            }).start(7070);
+            ctx.status(200);
+            ctx.json(trades);
         };
-            
+    }
 }
-
-
